@@ -1,0 +1,93 @@
+package com.store.store.config;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Service;
+
+import javax.crypto.SecretKey;  // Use javax.crypto.SecretKey
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+@Service
+public class JwtTokenProvider {
+
+    @Value("${jwt.secret}")
+    private String jwtSecret; // Diambil dari file properties
+
+    @Value("${jwt.expiration}")
+    private int jwtExpiration; // Waktu kadaluarsa token dalam milidetik
+
+    // Menghasilkan kunci rahasia dari jwtSecret yang dikonversi menjadi SecretKey
+    private SecretKey getSigningKey() {
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+    }
+
+    // Method untuk menghasilkan token JWT
+    public String generateToken(Authentication authentication) {
+        UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("username", userPrincipal.getUsername());
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(userPrincipal.getUsername())
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256) // Menggunakan kunci yang aman dari jwtSecret
+                .compact();
+    }
+
+    // Method untuk memvalidasi token JWT
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey()) // Menggunakan kunci yang sama untuk validasi
+                    .build()
+                    .parseClaimsJws(token); // Memvalidasi token
+            return !isTokenExpired(token); // Tambahkan pengecekan apakah token sudah expired
+        } catch (JwtException | IllegalArgumentException e) {
+            // Token tidak valid atau mengalami masalah
+            return false;
+        }
+    }
+
+    // Mendapatkan username dari token JWT
+    public String getUsernameFromToken(String token) {
+        return getClaimFromToken(token, Claims::getSubject);
+    }
+
+    // Mendapatkan klaim dari token JWT
+    private <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = getAllClaimsFromToken(token);
+        return claimsResolver.apply(claims);
+    }
+
+    // Mendapatkan semua klaim dari token JWT
+    private Claims getAllClaimsFromToken(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey()) // Menggunakan kunci yang sama untuk membaca token
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+
+    // Mengecek apakah token sudah expired
+    private boolean isTokenExpired(String token) {
+        final Date expiration = getExpirationDateFromToken(token);
+        return expiration.before(new Date());
+    }
+
+    // Mendapatkan tanggal expired dari token JWT
+    private Date getExpirationDateFromToken(String token) {
+        return getClaimFromToken(token, Claims::getExpiration);
+    }
+}

@@ -1,0 +1,9 @@
+services:
+  db:
+    image: 'postgres:latest'
+    environment:
+      - 'POSTGRES_DB=dianstore'
+      - 'POSTGRES_PASSWORD=123'
+      - 'POSTGRES_USER=dian'
+    ports:
+      - '5432:5432'
