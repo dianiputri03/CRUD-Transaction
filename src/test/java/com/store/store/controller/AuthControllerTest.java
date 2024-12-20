@@ -1,98 +1,99 @@
-// Unit Test for AuthController
 package com.store.store.controller;
-// Unit Test for AuthController
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.store.store.DTO.LoginRequest;
 import com.store.store.config.JwtTokenProvider;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.test.web.servlet.MockMvc;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.security.core.AuthenticationException;
 
-import java.util.HashMap;
 import java.util.Map;
 
-@WebMvcTest(AuthController.class)
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
 public class AuthControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private AuthenticationManager authenticationManager;
 
-    @MockBean
+    @Mock
     private JwtTokenProvider jwtTokenProvider;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Mock
+    private Authentication authentication;
+
+    @InjectMocks
+    private AuthController authController;
+
+    private LoginRequest loginRequest;
+    private final String TEST_USERNAME = "testuser";
+    private final String TEST_PASSWORD = "testpass";
+    private final String TEST_TOKEN = "test.jwt.token";
+
+    @BeforeEach
+    void setUp() {
+        loginRequest = new LoginRequest();
+        loginRequest.setUsername(TEST_USERNAME);
+        loginRequest.setPassword(TEST_PASSWORD);
+    }
 
     @Test
-    void testLogin_Success() throws Exception {
-        // Mock request data
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername("testuser");
-        loginRequest.setPassword("password");
-
-        // Mock authentication and token generation
-        Authentication authentication = mock(Authentication.class);
+    void login_SuccessfulAuthentication_ReturnsTokenInResponse() {
+        // Arrange
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
-        when(jwtTokenProvider.generateToken(authentication)).thenReturn("mockToken");
+        when(jwtTokenProvider.generateToken(authentication)).thenReturn(TEST_TOKEN);
 
-        // Perform request and verify
-        mockMvc.perform(post("/api/users/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("mockToken"));
+        // Act
+        ResponseEntity<?> response = authController.login(loginRequest);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody() instanceof Map);
+
+        @SuppressWarnings("unchecked")
+        Map<String, String> responseBody = (Map<String, String>) response.getBody();
+        assertEquals(TEST_TOKEN, responseBody.get("token"));
     }
 
     @Test
-    void testLogin_InvalidCredentials() throws Exception {
-        // Mock request data
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername("testuser");
-        loginRequest.setPassword("wrongpassword");
-
-        // Mock exception
+    void login_BadCredentials_ReturnsUnauthorized() {
+        // Arrange
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenThrow(new BadCredentialsException("Invalid username or password"));
+                .thenThrow(new BadCredentialsException("Invalid credentials"));
 
-        // Perform request and verify
-        mockMvc.perform(post("/api/users/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Invalid username or password"));
+        // Act
+        ResponseEntity<?> response = authController.login(loginRequest);
+
+        // Assert
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertEquals("Invalid username or password", response.getBody());
     }
 
     @Test
-    void testLogin_AuthenticationException() throws Exception {
-        // Mock request data
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername("testuser");
-        loginRequest.setPassword("password");
-
-        // Mock exception
+    void login_AuthenticationError_ReturnsInternalServerError() {
+        // Arrange
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenThrow(new RuntimeException("Authentication failed"));
+                .thenThrow(new AuthenticationException("Authentication failed") {});
 
-        // Perform request and verify
-        mockMvc.perform(post("/api/users/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Authentication failed"));
+        // Act
+        ResponseEntity<?> response = authController.login(loginRequest);
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals("Authentication failed", response.getBody());
     }
 }
