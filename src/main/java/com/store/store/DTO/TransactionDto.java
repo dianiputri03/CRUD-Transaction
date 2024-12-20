@@ -3,12 +3,12 @@ package com.store.store.DTO;
 import java.time.LocalDateTime;
 
 public class TransactionDto {
-    private Long id;  // ID transaksi
-    private Long userId;  // ID pengguna
-    private Long productId;  // ID produk
-    private Integer quantity;  // Jumlah produk yang dibeli
-    private Double totalPrice;  // Total harga
-    private LocalDateTime createdAt;  // Waktu transaksi
+    private Long id;
+    private Long userId;
+    private Long productId;
+    private Integer quantity;
+    private Double totalPrice;
+    private LocalDateTime createdAt;
 
     // Getter dan Setter untuk id
     public Long getId() {
